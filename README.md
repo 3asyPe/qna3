@@ -2,7 +2,7 @@
 
 TG channel - https://t.me/easypeoff
 
-This is using code for claiming from this script - https://t.me/ApeCryptor/46
+This script is using code for claiming from this script - https://t.me/ApeCryptor/46
 
 ## Capabilities
 
@@ -32,6 +32,10 @@ pip install -r requirements.txt
 ```
 
 ## Settings
+Input private keys in data/private_keys.txt
+
+Input proxies in data/proxies.txt
+
 Read and configure script in settings.py
 
 ## Run
