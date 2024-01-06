@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "qna-3"
+version = "0.1.0"
+description = ""
+authors = ["Alex Kvasha <alex_kvasha@tut.by>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+questionary = "^2.0.1"
+loguru = "^0.7.2"
+web3 = "^6.13.0"
+hdwallet = "^2.2.1"
+ccxt = "^4.2.8"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
