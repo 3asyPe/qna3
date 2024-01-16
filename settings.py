@@ -1,5 +1,7 @@
 # Referal link to qna3.ai
-REF_LINK = "https://qna3.ai/?code=r2N4RSaK"
+REF_LINK = "https://qna3.ai/?code=dD9p7HHZ"
+
+SHUFFLE_WALLETS = True
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
@@ -19,13 +21,20 @@ USER_AGENTS = [
 ]
 
 MIN_SLEEP = 30
-MAX_SLEEP = 4000
+MAX_SLEEP = 200
+
+MAX_RETRIES = 2
 
 NETWORK = "OPBNB"  # BNB or OPBNB
 
 BNB_RPC = "https://bsc.publicnode.com"
 OPBNB_RPC = "https://opbnb.publicnode.com"
 
+
+# ___________________________________________
+# |             CLAIM POINTS                |
+
+CLAIM_ONLY_IF_POINTS_GREATER_THAN = 200
 
 # ___________________________________________
 # |             BINANCE WITHDRAW            |

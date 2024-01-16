@@ -1,13 +1,14 @@
-import asyncio
 import json
+import time
 import aiohttp
-import random
+import asyncio
 from loguru import logger
 from web3 import AsyncWeb3
 from modules.utils import sleep
-from settings import MAX_SLEEP, MIN_SLEEP, NETWORK, REF_LINK
+from settings import MAX_RETRIES, NETWORK
 from eth_account.messages import encode_defunct
 from settings import BNB_RPC, OPBNB_RPC
+from web3.exceptions import TransactionNotFound
 
 
 if NETWORK == "BNB":
@@ -16,40 +17,58 @@ else:
     web3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(OPBNB_RPC))
 
 
-async def claim_wallets(accounts):
+async def daily_check_in(accounts):
     for i, acc in enumerate(accounts, start=1):
         account = web3.eth.account.from_key(acc["private_key"])
-        signature = await get_signature(acc["private_key"])
-        auth_token, user_id = await login(
-            signature, account.address, acc["user_agent"], acc["proxy"]
-        )
+        signature = get_signature(acc["private_key"])
 
-        if await check_today_claim(
-            auth_token, user_id, acc["user_agent"], acc["proxy"]
-        ):
-            logger.warning(
-                f"[{account.address}] Points already claimed today. Skipping..."
-            )
-            await sleep(account.address)
-            continue
+        cur_retry = 0
+        while True:
+            try:
+                auth_token, user_id = await login(
+                    signature, account.address, acc["user_agent"], acc["proxy"]
+                )
 
-        tx = await send_claim_tx(acc["private_key"], account.address)
-        if not tx:
-            continue
+                if await check_today_claim(
+                    auth_token, user_id, acc["user_agent"], acc["proxy"]
+                ):
+                    logger.warning(
+                        f"[{account.address}] Already checked in today. Skipping..."
+                    )
+                    break
 
-        resp_text = await send_hash(
-            auth_token, user_id, tx, acc["user_agent"], acc["proxy"]
-        )
-        if resp_text == '{"statusCode":422,"message":"user already signed in today"}':
-            logger.warning(
-                f"[{account.address}] Points already claimed today. Skipping..."
-            )
-        elif json.loads(resp_text)["statusCode"] != 200:
-            logger.error(
-                f"[{account.address}] | An error occured while sending hash to qna3.ai | {resp_text}"
-            )
-        else:
-            logger.success(f"[{account.address}] | Claimed points")
+                tx = await send_claim_tx(acc["private_key"], account.address)
+                if not tx:
+                    raise Exception("Failed to send tx")
+
+                resp_text = await send_hash(
+                    auth_token, user_id, tx, acc["user_agent"], acc["proxy"]
+                )
+
+                if (
+                    resp_text
+                    == '{"statusCode":422,"message":"user already signed in today"}'
+                ):
+                    logger.warning(
+                        f"[{account.address}] Already checked in today. Skipping..."
+                    )
+                elif json.loads(resp_text)["statusCode"] != 200:
+                    logger.error(
+                        f"[{account.address}] | An error occured while sending hash to qna3.ai | {resp_text}"
+                    )
+                    raise Exception("Failed to send hash")
+                else:
+                    logger.success(f"[{account.address}] | Successfully checked in!")
+
+                break
+            except Exception as e:
+                logger.error(f"[{account.address}] Raised an error | {e}")
+                cur_retry += 1
+                if cur_retry < MAX_RETRIES:
+                    logger.info(f"[{account.address}] Retrying...")
+                    await sleep(account.address)
+                else:
+                    break
 
         if i != len(accounts):
             await sleep(account.address)
@@ -116,18 +135,20 @@ async def send_claim_tx(private_key, address):
         "gas": 35000,
     }
 
+    signed_tx = web3.eth.account.sign_transaction(tx, private_key=private_key)
     try:
-        signed_tx = web3.eth.account.sign_transaction(tx, private_key=private_key)
         send_tx = await web3.eth.send_raw_transaction(signed_tx.rawTransaction)
-        tx_receipt = await web3.eth.wait_for_transaction_receipt(send_tx)
+        tx_receipt = await wait_until_tx_finished(address, send_tx, max_wait_time=960)
+        if tx_receipt is None:
+            raise Exception("Tx failed")
 
-        return tx_receipt["transactionHash"].hex()
+        return tx_receipt
     except Exception as error:
         logger.error(f"[{address}] | Claim tx error | {error}")
-        return False
+    return False
 
 
-async def get_signature(private_key):
+def get_signature(private_key):
     message = encode_defunct(text="AI + DYOR = Ultimate Answer to Unlock Web3 Universe")
     signed_message = web3.eth.account.sign_message(message, private_key=private_key)
     signature = signed_message.signature.hex()
@@ -201,3 +222,24 @@ async def send_hash(auth_token, user_id, hash, user_agent, proxy):
             proxy=f"http://{proxy}",
         ) as response:
             return await response.text()
+
+
+async def wait_until_tx_finished(address, hash: str, max_wait_time=480) -> None:
+    start_time = time.time()
+    while True:
+        try:
+            receipts = await web3.eth.get_transaction_receipt(hash)
+            status = receipts.get("status")
+            if status == 1:
+                logger.success(f"[{address}] {hash.hex()} successfully!")
+                return receipts["transactionHash"].hex()
+            elif status is None:
+                await asyncio.sleep(0.3)
+            else:
+                logger.error(f"[{address}] {hash.hex()} transaction failed! {receipts}")
+                return None
+        except TransactionNotFound:
+            if time.time() - start_time > max_wait_time:
+                logger.error(f"[{address}]{hash.hex()} transaction failed!")
+                return None
+            await asyncio.sleep(1)

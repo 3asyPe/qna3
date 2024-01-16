@@ -2,7 +2,7 @@
 
 TG channel - https://t.me/easypeoff
 
-This script is using code for claiming from this script - https://t.me/ApeCryptor/46
+This script is using code for daily check in from this script - https://t.me/ApeCryptor/46
 
 ## Capabilities
 
@@ -12,7 +12,11 @@ This script is using code for claiming from this script - https://t.me/ApeCrypto
 
 3) Register an account on qna3.ai using your referal code
 
-4) Claim daily points
+4) Daily check ins
+
+5) Get claimable points (how many are there to claim)
+
+6) Claim points
 
 Other:
 

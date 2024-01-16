@@ -22,10 +22,14 @@ async def withdraw_from_binance(accounts):
         "options": {"defaultType": "spot"},
     }
 
-    params = {"network": NETWORK}
-    amount = round(random.uniform(MIN_WITHDRAW, MAX_WITHDRAW), 6)
+    if NETWORK == "OPBNB":
+        params = {"network": "OPBNB"}
+    else:
+        params = {"network": "BEP20"}
 
     for i, acc in enumerate(accounts, start=1):
+        amount = round(random.uniform(MIN_WITHDRAW, MAX_WITHDRAW), 6)
+
         if USE_PROXY_FOR_BINANCE:
             client_params["proxies"] = {
                 "http": f"http://{acc['proxy']}",

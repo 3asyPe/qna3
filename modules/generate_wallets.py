@@ -40,7 +40,7 @@ async def generate_wallets(*args, **kwargs):
         )
         # Drive Ethereum BIP44HDWallet
         bip44_hdwallet.from_path(path=bip44_derivation)
-        # Print address_index, path, address and private_key
+
         address = bip44_hdwallet.address()
         key = bip44_hdwallet.private_key()
         # Clean derivation indexes/paths
