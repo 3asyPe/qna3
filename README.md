@@ -4,7 +4,7 @@ TG channel - https://t.me/easypeoff
 
 This script is using code for daily check in from this script - https://t.me/ApeCryptor/46
 
-This script requires https://2captcha.com/?from=21563026 balance
+This script requires [2captcha](https://2captcha.com/?from=21563026) balance
 
 ## Capabilities
 
@@ -32,7 +32,7 @@ Other:
 
 ## 2captcha
 
-Create an account on https://2captcha.com/?from=21563026 and top up the balance.
+Create an account on [2captcha](https://2captcha.com/?from=21563026) and top up the balance.
 
 Get the API key in your profile and set it in settings.py
 
