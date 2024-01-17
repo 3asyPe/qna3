@@ -11,7 +11,6 @@ from web3.exceptions import TransactionNotFound
 
 from settings import (
     BNB_RPC,
-    CHECK_NUMBER_OF_TOKENS_BEFORE_CLAIM,
     CLAIM_ONLY_IF_POINTS_GREATER_THAN,
     MAX_RETRIES,
 )

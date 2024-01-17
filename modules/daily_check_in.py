@@ -2,6 +2,7 @@ import json
 import time
 import aiohttp
 import asyncio
+import traceback
 from loguru import logger
 from web3 import AsyncWeb3
 from modules.captcha_solver import CaptchaSolver
