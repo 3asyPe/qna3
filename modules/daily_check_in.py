@@ -4,6 +4,7 @@ import aiohttp
 import asyncio
 from loguru import logger
 from web3 import AsyncWeb3
+from modules.captcha_solver import CaptchaSolver
 from modules.utils import sleep
 from settings import MAX_RETRIES, NETWORK
 from eth_account.messages import encode_defunct
@@ -25,10 +26,33 @@ async def daily_check_in(accounts):
         cur_retry = 0
         while True:
             try:
+                captcha_token = CaptchaSolver(acc["proxy"]).solve()["code"]
                 auth_token, user_id = await login(
-                    signature, account.address, acc["user_agent"], acc["proxy"]
+                    signature,
+                    account.address,
+                    acc["user_agent"],
+                    acc["proxy"],
+                    captcha_token,
                 )
+                break
+            except Exception as e:
+                logger.error(f"[{account.address}] Raised an error | {e}")
+                cur_retry += 1
+                if cur_retry < MAX_RETRIES:
+                    logger.info(f"[{account.address}] Retrying...")
+                    await sleep(account.address)
+                else:
+                    break
 
+        try:
+            if not auth_token:
+                raise Exception("Failed to login")
+        except Exception as e:
+            continue
+
+        cur_retry = 0
+        while True:
+            try:
                 if await check_today_claim(
                     auth_token, user_id, acc["user_agent"], acc["proxy"]
                 ):
@@ -41,8 +65,24 @@ async def daily_check_in(accounts):
                 if not tx:
                     raise Exception("Failed to send tx")
 
+                captcha_token = CaptchaSolver(acc["proxy"]).solve("checkin")["code"]
+                await asyncio.sleep(3)
+                if not await validate_check_in(
+                    auth_token,
+                    user_id,
+                    acc["user_agent"],
+                    acc["proxy"],
+                    captcha_token,
+                ):
+                    raise Exception("Failed to validate check in")
+                await asyncio.sleep(5)
                 resp_text = await send_hash(
-                    auth_token, user_id, tx, acc["user_agent"], acc["proxy"]
+                    auth_token,
+                    user_id,
+                    tx,
+                    acc["user_agent"],
+                    acc["proxy"],
+                    recaptcha_token=captcha_token,
                 )
 
                 if (
@@ -74,6 +114,41 @@ async def daily_check_in(accounts):
             await sleep(account.address)
 
 
+async def validate_check_in(auth_token, user_id, user_agent, proxy, recaptcha_token):
+    headers = {
+        "Accept": "*/*",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Authorization": auth_token,
+        "Content-Type": "application/json",
+        "Origin": "https://qna3.ai",
+        "User-Agent": user_agent,
+        "X-Id": user_id,
+        "X-Lang": "english",
+    }
+
+    req_json = {
+        "action": "checkin",
+        "recaptcha": recaptcha_token,
+    }
+
+    logger.info("Validating check in...")
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            url="https://api.qna3.ai/api/v2/my/validate",
+            headers=headers,
+            json=req_json,
+            proxy=f"http://{proxy}",
+        ) as response:
+            resp_txt = await response.text()
+            if resp_txt == '{"statusCode":200}':
+                return True
+            else:
+                logger.error(f"An error occured while validating check in | {resp_txt}")
+                return False
+
+
 async def check_today_claim(auth_token, user_id, user_agent, proxy):
     headers = {
         "Accept": "*/*",
@@ -83,6 +158,12 @@ async def check_today_claim(auth_token, user_id, user_agent, proxy):
         "Content-Type": "application/json",
         "Origin": "https://qna3.ai",
         "User-Agent": user_agent,
+        "Sec-Ch-Ua": '"Google Chrome";v="111", "Not(A:Brand";v="8", "Chromium";v="111"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"',
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-site",
         "X-Id": user_id,
         "X-Lang": "english",
     }
@@ -99,6 +180,8 @@ async def check_today_claim(auth_token, user_id, user_agent, proxy):
         },
     }
 
+    logger.info("Checking if there is something to claim...")
+
     async with aiohttp.ClientSession() as session:
         async with session.post(
             url="https://api.qna3.ai/api/v2/graphql",
@@ -106,7 +189,6 @@ async def check_today_claim(auth_token, user_id, user_agent, proxy):
             json=req_json,
             proxy=f"http://{proxy}",
         ) as response:
-            # text = response.text()
             resp_txt = await response.json()
 
             try:
@@ -156,7 +238,7 @@ def get_signature(private_key):
     return signature
 
 
-async def login(signature, address, user_agent, proxy):
+async def login(signature, address, user_agent, proxy, recaptcha_token):
     headers = {
         "Accept": "application/json, text/plain, */*",
         "Accept-Encoding": "gzip, deflate, br",
@@ -176,7 +258,10 @@ async def login(signature, address, user_agent, proxy):
     req_json = {
         "signature": signature,
         "wallet_address": address,
+        "recaptcha": recaptcha_token,
     }
+
+    logger.info("Logging in...")
 
     async with aiohttp.ClientSession() as session:
         async with session.post(
@@ -193,15 +278,15 @@ async def login(signature, address, user_agent, proxy):
             return auth_token, user_id
 
 
-async def send_hash(auth_token, user_id, hash, user_agent, proxy):
+async def send_hash(auth_token, user_id, hash, user_agent, proxy, recaptcha_token):
     via = NETWORK.lower()
 
-    req_json = {"hash": hash, "via": via}
+    req_json = {"hash": hash, "recaptcha": recaptcha_token, "via": via}
 
     headers = {
         "Accept": "application/json, text/plain, */*",
         "Accept-Encoding": "gzip, deflate, br",
-        "Accept-Language": "en-US,en;q=0.9,ru-RU;q=0.8,ru;q=0.7",
+        "Accept-Language": "en-US,en;q=0.9",
         "Authorization": auth_token,
         "Content-Type": "application/json",
         "Origin": "https://qna3.ai",
@@ -214,6 +299,7 @@ async def send_hash(auth_token, user_id, hash, user_agent, proxy):
         "X-Lang": "english",
     }
 
+    logger.info("Sending hash...")
     async with aiohttp.ClientSession() as session:
         async with session.post(
             url="https://api.qna3.ai/api/v2/my/check-in",
@@ -221,7 +307,8 @@ async def send_hash(auth_token, user_id, hash, user_agent, proxy):
             json=req_json,
             proxy=f"http://{proxy}",
         ) as response:
-            return await response.text()
+            resp = await response.text()
+            return resp
 
 
 async def wait_until_tx_finished(address, hash: str, max_wait_time=480) -> None:

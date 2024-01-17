@@ -20,8 +20,8 @@ USER_AGENTS = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 ]
 
-MIN_SLEEP = 30
-MAX_SLEEP = 200
+MIN_SLEEP = 20
+MAX_SLEEP = 30
 
 MAX_RETRIES = 2
 
@@ -29,6 +29,9 @@ NETWORK = "OPBNB"  # BNB or OPBNB
 
 BNB_RPC = "https://bsc.publicnode.com"
 OPBNB_RPC = "https://opbnb.publicnode.com"
+
+# Top up balance and get an API key on https://2captcha.com/?from=21563026
+TWO_CAPTCHA_API_KEY = ""
 
 
 # ___________________________________________

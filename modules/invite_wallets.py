@@ -6,9 +6,10 @@ from loguru import logger
 import requests
 from web3.auto import w3
 from eth_account.messages import encode_defunct
+from modules.captcha_solver import CaptchaSolver
 from modules.utils import sleep
 
-from settings import REF_LINK, USER_AGENTS
+from settings import MAX_RETRIES, REF_LINK, USER_AGENTS
 
 
 def get_signature(private_key):
@@ -36,16 +37,35 @@ async def send_request(signature, address, user_agent, proxy, ref_code):
         "x-lang": "english",
     }
 
-    json = {"invite_code": ref_code, "signature": signature, "wallet_address": address}
+    logger.info("Inviting...")
 
-    async with aiohttp.ClientSession() as session:
-        resp = await session.post(
-            "https://api.qna3.ai/api/v2/auth/login?via=wallet",
-            json=json,
-            headers=headers,
-            proxy=f"http://{proxy}",
-        )
-        return resp
+    cur_retry = 0
+    while True:
+        try:
+            captcha_token = CaptchaSolver(proxy).solve()["code"]
+            json = {
+                "invite_code": ref_code,
+                "recaptcha": captcha_token,
+                "signature": signature,
+                "wallet_address": address,
+            }
+            async with aiohttp.ClientSession() as session:
+                resp = await session.post(
+                    "https://api.qna3.ai/api/v2/auth/login?via=wallet",
+                    json=json,
+                    headers=headers,
+                    proxy=f"http://{proxy}",
+                )
+                return resp
+            break
+        except Exception as e:
+            logger.error(f"[{address}] Raised an error | {e}")
+            cur_retry += 1
+            if cur_retry < MAX_RETRIES:
+                logger.info(f"[{address}] Retrying...")
+                await sleep(address)
+            else:
+                break
 
 
 async def invite_wallets(accounts, *args, **kwargs):
@@ -54,7 +74,7 @@ async def invite_wallets(accounts, *args, **kwargs):
         return
 
     for i, acc in enumerate(accounts, start=1):
-        logger.info(f"Inviting #{i} {acc['user_agent']}")
+        logger.info(f"Inviting #{i}")
         account = w3.eth.account.from_key(acc["private_key"])
         signature = get_signature(acc["private_key"])
         resp = await send_request(

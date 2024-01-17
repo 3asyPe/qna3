@@ -4,6 +4,7 @@ import sys
 from questionary import Choice
 import questionary
 from config import PRIVATE_KEYS, PROXIES
+from modules.captcha_solver import get_2captcha_balance
 from modules.points import get_claimable_points, claim_points
 from modules.generate_wallets import generate_wallets
 from modules.invite_wallets import invite_wallets
@@ -25,6 +26,7 @@ def get_module():
                 "Daily check in": daily_check_in,
                 "Claim points": claim_points,
                 "Get Claimable Points": get_claimable_points,
+                "Get 2captcha balance": get_2captcha_balance,
                 "Exit": "exit",
             }.items(),
             start=1,

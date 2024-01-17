@@ -5,10 +5,16 @@ import aiohttp
 from loguru import logger
 
 from web3 import AsyncWeb3
+from modules.captcha_solver import CaptchaSolver
 from modules.utils import sleep
 from web3.exceptions import TransactionNotFound
 
-from settings import BNB_RPC, CLAIM_ONLY_IF_POINTS_GREATER_THAN, MAX_RETRIES
+from settings import (
+    BNB_RPC,
+    CHECK_NUMBER_OF_TOKENS_BEFORE_CLAIM,
+    CLAIM_ONLY_IF_POINTS_GREATER_THAN,
+    MAX_RETRIES,
+)
 from modules.daily_check_in import login, get_signature
 
 
@@ -23,12 +29,40 @@ async def claim_points(accounts):
         cur_retry = 0
         while True:
             try:
+                captcha_token = CaptchaSolver(acc["proxy"]).solve()["code"]
                 auth_token, user_id = await login(
-                    signature, account.address, acc["user_agent"], acc["proxy"]
+                    signature,
+                    account.address,
+                    acc["user_agent"],
+                    acc["proxy"],
+                    captcha_token,
                 )
+                break
+            except Exception as e:
+                logger.error(f"[{account.address}] Raised an error | {e}")
+                cur_retry += 1
+                if cur_retry < MAX_RETRIES:
+                    logger.info(f"[{account.address}] Retrying...")
+                    await sleep(account.address)
+                else:
+                    break
 
+        try:
+            if not auth_token:
+                raise Exception("Failed to login")
+        except Exception as e:
+            continue
+
+        cur_retry = 0
+        while True:
+            try:
+                captcha_token = CaptchaSolver(acc["proxy"]).solve()["code"]
                 data = await _get_claim_points(
-                    auth_token, user_id, acc["user_agent"], acc["proxy"]
+                    auth_token,
+                    user_id,
+                    acc["user_agent"],
+                    acc["proxy"],
+                    captcha_token,
                 )
 
                 if data["statusCode"] == 200 and "amount" not in data.get("data", {}):
@@ -144,7 +178,7 @@ async def send_claim_tx(private_key, address, amount, signature, nonce):
     return False
 
 
-async def _get_claim_points(auth_token, user_id, user_agent, proxy):
+async def _get_claim_points(auth_token, user_id, user_agent, proxy, captcha_token):
     headers = {
         "Accept": "*/*",
         "Accept-Encoding": "gzip, deflate, br",
@@ -157,10 +191,13 @@ async def _get_claim_points(auth_token, user_id, user_agent, proxy):
         "X-Lang": "english",
     }
 
+    logger.info("Getting claimable points...")
+
     async with aiohttp.ClientSession() as session:
         async with session.post(
             url="https://api.qna3.ai/api/v2/my/claim-all",
             headers=headers,
+            json={"recaptcha": captcha_token},
             proxy=f"http://{proxy}",
         ) as resp:
             if resp.status not in (200, 201):
@@ -178,12 +215,36 @@ async def get_claimable_points(accounts):
         cur_retry = 0
         while True:
             try:
+                captcha_token = CaptchaSolver(acc["proxy"]).solve()["code"]
                 auth_token, user_id = await login(
-                    signature, account.address, acc["user_agent"], acc["proxy"]
+                    signature,
+                    account.address,
+                    acc["user_agent"],
+                    acc["proxy"],
+                    captcha_token,
                 )
+                break
+            except Exception as e:
+                logger.error(f"[{account.address}] Raised an error | {e}")
+                cur_retry += 1
+                if cur_retry < MAX_RETRIES:
+                    logger.info(f"[{account.address}] Retrying...")
+                    await sleep(account.address)
+                else:
+                    break
 
+        try:
+            if not auth_token:
+                raise Exception("Failed to login")
+        except Exception as e:
+            continue
+
+        cur_retry = 0
+        while True:
+            try:
+                captcha_token = CaptchaSolver(acc["proxy"]).solve()["code"]
                 data = await _get_claim_points(
-                    auth_token, user_id, acc["user_agent"], acc["proxy"]
+                    auth_token, user_id, acc["user_agent"], acc["proxy"], captcha_token
                 )
 
                 if data["statusCode"] == 200 and "amount" not in data.get("data", {}):
