@@ -2,10 +2,8 @@ import json
 import time
 import aiohttp
 import asyncio
-import traceback
 from loguru import logger
 from web3 import AsyncWeb3
-from modules.captcha_solver import CaptchaSolver
 from modules.utils import sleep
 from settings import MAX_RETRIES, NETWORK
 from eth_account.messages import encode_defunct
@@ -27,13 +25,11 @@ async def daily_check_in(accounts):
         cur_retry = 0
         while True:
             try:
-                captcha_token = CaptchaSolver(acc["proxy"]).solve()["code"]
                 auth_token, user_id = await login(
                     signature,
                     account.address,
                     acc["user_agent"],
                     acc["proxy"],
-                    captcha_token,
                 )
                 break
             except Exception as e:
@@ -66,24 +62,12 @@ async def daily_check_in(accounts):
                 if not tx:
                     raise Exception("Failed to send tx")
 
-                captcha_token = CaptchaSolver(acc["proxy"]).solve("checkin")["code"]
-                await asyncio.sleep(3)
-                if not await validate_check_in(
-                    auth_token,
-                    user_id,
-                    acc["user_agent"],
-                    acc["proxy"],
-                    captcha_token,
-                ):
-                    raise Exception("Failed to validate check in")
-                await asyncio.sleep(5)
                 resp_text = await send_hash(
                     auth_token,
                     user_id,
                     tx,
                     acc["user_agent"],
                     acc["proxy"],
-                    recaptcha_token=captcha_token,
                 )
 
                 if (
@@ -113,41 +97,6 @@ async def daily_check_in(accounts):
 
         if i != len(accounts):
             await sleep(account.address)
-
-
-async def validate_check_in(auth_token, user_id, user_agent, proxy, recaptcha_token):
-    headers = {
-        "Accept": "*/*",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Authorization": auth_token,
-        "Content-Type": "application/json",
-        "Origin": "https://qna3.ai",
-        "User-Agent": user_agent,
-        "X-Id": user_id,
-        "X-Lang": "english",
-    }
-
-    req_json = {
-        "action": "checkin",
-        "recaptcha": recaptcha_token,
-    }
-
-    logger.info("Validating check in...")
-
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            url="https://api.qna3.ai/api/v2/my/validate",
-            headers=headers,
-            json=req_json,
-            proxy=f"http://{proxy}",
-        ) as response:
-            resp_txt = await response.text()
-            if resp_txt == '{"statusCode":200}':
-                return True
-            else:
-                logger.error(f"An error occured while validating check in | {resp_txt}")
-                return False
 
 
 async def check_today_claim(auth_token, user_id, user_agent, proxy):
@@ -239,7 +188,7 @@ def get_signature(private_key):
     return signature
 
 
-async def login(signature, address, user_agent, proxy, recaptcha_token):
+async def login(signature, address, user_agent, proxy):
     headers = {
         "Accept": "application/json, text/plain, */*",
         "Accept-Encoding": "gzip, deflate, br",
@@ -259,7 +208,6 @@ async def login(signature, address, user_agent, proxy, recaptcha_token):
     req_json = {
         "signature": signature,
         "wallet_address": address,
-        "recaptcha": recaptcha_token,
     }
 
     logger.info("Logging in...")
@@ -279,10 +227,10 @@ async def login(signature, address, user_agent, proxy, recaptcha_token):
             return auth_token, user_id
 
 
-async def send_hash(auth_token, user_id, hash, user_agent, proxy, recaptcha_token):
+async def send_hash(auth_token, user_id, hash, user_agent, proxy):
     via = NETWORK.lower()
 
-    req_json = {"hash": hash, "recaptcha": recaptcha_token, "via": via}
+    req_json = {"hash": hash, "via": via}
 
     headers = {
         "Accept": "application/json, text/plain, */*",

@@ -1,15 +1,10 @@
-import asyncio
-import random
-import time
 import aiohttp
 from loguru import logger
-import requests
 from web3.auto import w3
 from eth_account.messages import encode_defunct
-from modules.captcha_solver import CaptchaSolver
 from modules.utils import sleep
 
-from settings import MAX_RETRIES, REF_LINK, USER_AGENTS
+from settings import MAX_RETRIES, REF_LINK
 
 
 def get_signature(private_key):
@@ -42,10 +37,8 @@ async def send_request(signature, address, user_agent, proxy, ref_code):
     cur_retry = 0
     while True:
         try:
-            captcha_token = CaptchaSolver(proxy).solve()["code"]
             json = {
                 "invite_code": ref_code,
-                "recaptcha": captcha_token,
                 "signature": signature,
                 "wallet_address": address,
             }

@@ -30,10 +30,6 @@ NETWORK = "OPBNB"  # BNB or OPBNB
 BNB_RPC = "https://bsc.publicnode.com"
 OPBNB_RPC = "https://opbnb.publicnode.com"
 
-# Top up balance and get an API key on https://2captcha.com/?from=21563026
-TWO_CAPTCHA_API_KEY = ""
-
-
 # ___________________________________________
 # |             CLAIM POINTS                |
 
